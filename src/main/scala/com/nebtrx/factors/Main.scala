@@ -1,6 +1,7 @@
 package com.nebtrx.factors
 
-import cats.effect.{ExitCode, IO, IOApp}
+import cats.data.OptionT
+import cats.effect.{Concurrent, ExitCode, IO, IOApp}
 import com.nebtrx.factors.actors.{Actor, MessageHandler}
 
 object Main extends IOApp {
@@ -10,9 +11,16 @@ object Main extends IOApp {
   case object Print extends Counter[String]
 
   val handler: MessageHandler[IO, Counter, Int] = new MessageHandler[IO, Counter, Int] {
-    def receive[A](state: Int, msg: Counter[A]): IO[(Int, A)] = msg match {
+    def receive[A](state: Int, msg: Counter[A], sender: Option[Actor[IO, Counter]])
+                  (implicit M: Concurrent[IO]): IO[(Int, A)] = msg match {
       case Add(n) => IO.pure((state + n, ()))
-      case Get    => IO.pure((state, state))
+      //      case Get    => IO.pure((state, state))
+      case Get    => (for {
+        s <- OptionT.fromOption[IO](sender)
+          async <- OptionT.liftF((for {
+            _ <- s ! Add(10)
+          } yield ()).start)
+      } yield ()).value.map(_ => (state, state))
       case Print  => IO(println(state)).flatMap(_ => IO.pure((state, state.toString)))
     }
   }

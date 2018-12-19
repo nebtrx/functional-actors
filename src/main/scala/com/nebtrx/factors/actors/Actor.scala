@@ -11,14 +11,15 @@ import fs2.concurrent.Queue
 
 trait Actor[F[_], M[+ _]] {
 
-  def ![A](fa: M[A]): F[A]
+  // TODO: make the sender more expressive
+  def ![A](fa: M[A])(implicit sender: Option[Actor[F, M]] = Some(this)): F[A]
 
   def stop(): F[Unit]
 }
 
 object Actor {
 
-  type ActorMessage[F[_], M[+ _], A] = (M[A], Deferred[F, A])
+  private type ActorMessage[F[_], M[+ _], A] = (M[A], Deferred[F, A], Option[Actor[F, M]])
 
   def apply[F[_], M[+ _], S](initialState: S, messageHandler: MessageHandler[F, M, S])
                             (implicit M: Concurrent[F])
@@ -29,8 +30,8 @@ object Actor {
                   : F[Unit] =
       for {
         state <- stateHolder.get
-        (msg, deferred) = pendingMsg
-        result <- messageHandler.receive(state, msg)
+        (msg, deferred, sender) = pendingMsg
+        result <- messageHandler.receive(state, msg, sender)
         (newState, output) = result
         _ <- stateHolder.set(newState) *> deferred.complete(output)
       } yield ()
@@ -44,10 +45,10 @@ object Actor {
       } yield ()).foreverM.void.start
     } yield
       new Actor[F, M] {
-        def ![A](fa: M[A]): F[A] =
+        def ![A](fa: M[A])(implicit sender: Option[Actor[F, M]]): F[A] =
           for {
             deferred <- Deferred[F, A]
-            _ <- queue.offer1((fa, deferred))
+            _ <- queue.offer1((fa, deferred, sender))
             output <- (consumer.join race deferred.get)
               .collect { case Right(o) => o }
           } yield output
