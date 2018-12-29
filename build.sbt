@@ -14,6 +14,17 @@ scalacOptions ++= Seq(
   "-Ypartial-unification" // allow the compiler to unify type constructors of different arities
 )
 
-libraryDependencies += "co.fs2" %% "fs2-core" % "1.0.0"
+
+libraryDependencies ++= {
+  val LogbackVersion = "1.2.3"
+  val log4CatsVersion = "0.2.0"
+
+  Seq(
+    "co.fs2" %% "fs2-core" % "1.0.0",
+    "ch.qos.logback" % "logback-classic" % LogbackVersion,
+    "io.chrisdavenport" %% "log4cats-core" % log4CatsVersion,
+    "io.chrisdavenport" %% "log4cats-slf4j" % log4CatsVersion)
+}
+
 
 addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.3")
